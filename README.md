@@ -1,3 +1,14 @@
+---
+title: Email Triage Env
+emoji: 📧
+colorFrom: blue
+colorTo: green
+sdk: docker
+app_port: 7860
+tags:
+  - openenv
+---
+
 # Email Triage Environment — OpenEnv RL Challenge
 
 A real-world email triage environment built on the [OpenEnv](https://github.com/meta-pytorch/OpenEnv) specification for the Meta PyTorch Hackathon.
