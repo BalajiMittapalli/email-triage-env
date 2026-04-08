@@ -219,9 +219,52 @@ def root():
         .warn { color: var(--warn); }
         .full { grid-column: 1 / -1; }
         .muted { color: var(--muted); font-size: 0.92rem; }
+        .kv {
+            display: grid;
+            grid-template-columns: 150px 1fr;
+            gap: 8px 12px;
+            font-size: 0.92rem;
+            margin-bottom: 10px;
+        }
+        .k { color: var(--muted); font-weight: 600; }
+        .v { color: var(--ink); }
+        .email-box {
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            background: #fffef9;
+            padding: 10px;
+        }
+        .email-box h3 {
+            margin: 0 0 8px;
+            font-size: 1rem;
+            line-height: 1.3;
+        }
+        .email-body {
+            white-space: pre-wrap;
+            line-height: 1.4;
+            margin: 0;
+        }
+        .chips {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            margin-bottom: 10px;
+        }
+        .chip {
+            border-radius: 999px;
+            padding: 6px 10px;
+            font-size: 0.85rem;
+            font-weight: 700;
+            border: 1px solid var(--border);
+            background: #fffef9;
+        }
+        .chip-ok { background: #ecfdf3; color: #166534; border-color: #86efac; }
+        .chip-mid { background: #fffbeb; color: #9a3412; border-color: #fcd34d; }
+        .chip-bad { background: #fef2f2; color: #991b1b; border-color: #fca5a5; }
         @media (max-width: 840px) {
             .grid { grid-template-columns: 1fr; }
             .wrap { padding: 14px; }
+            .kv { grid-template-columns: 1fr; }
         }
     </style>
 </head>
@@ -299,12 +342,21 @@ def root():
 
             <article class="card full">
                 <h2>Current Observation</h2>
-                <div id="observation" class="mono">Run reset to load an email.</div>
+                <div id="observationPretty" class="email-box muted">Run reset to load an email.</div>
+                <details style="margin-top: 10px;">
+                    <summary class="muted">Show raw observation JSON</summary>
+                    <div id="observation" class="mono" style="margin-top: 8px;">Run reset to load an email.</div>
+                </details>
             </article>
 
             <article class="card full">
                 <h2>Step Result</h2>
-                <div id="result" class="mono">No step submitted yet.</div>
+                <div id="resultSummary" class="chips muted">No step submitted yet.</div>
+                <div id="resultPretty" class="email-box muted">Submit an action to see score and feedback.</div>
+                <details style="margin-top: 10px;">
+                    <summary class="muted">Show raw step result JSON</summary>
+                    <div id="result" class="mono" style="margin-top: 8px;">No step submitted yet.</div>
+                </details>
                 <p class="muted" style="margin-top: 8px;">
                     API Links: <a href="/docs" target="_blank">/docs</a> | <a href="/health" target="_blank">/health</a> | <a href="/schema" target="_blank">/schema</a>
                 </p>
@@ -320,7 +372,10 @@ def root():
         const resetStatus = document.getElementById('resetStatus');
         const stepStatus = document.getElementById('stepStatus');
         const observationEl = document.getElementById('observation');
+        const observationPrettyEl = document.getElementById('observationPretty');
         const resultEl = document.getElementById('result');
+        const resultSummaryEl = document.getElementById('resultSummary');
+        const resultPrettyEl = document.getElementById('resultPretty');
 
         const categoryEl = document.getElementById('category');
         const priorityEl = document.getElementById('priority');
@@ -362,6 +417,73 @@ def root():
             return JSON.stringify(obj, null, 2);
         }
 
+        function esc(value) {
+            return String(value ?? '')
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        }
+
+        function text(value) {
+            if (value === null || value === undefined || value === '') return '—';
+            return String(value);
+        }
+
+        function chipClass(score) {
+            if (score >= 0.75) return 'chip chip-ok';
+            if (score >= 0.4) return 'chip chip-mid';
+            return 'chip chip-bad';
+        }
+
+        function renderObservation(obs) {
+            if (!obs) {
+                observationPrettyEl.innerHTML = '<span class="muted">No observation.</span>';
+                observationEl.textContent = 'No observation.';
+                return;
+            }
+
+            observationPrettyEl.innerHTML = `
+                <div class="kv">
+                    <div class="k">Task</div><div class="v">${esc(text(obs.task_name))} (${esc(text(obs.task_difficulty))})</div>
+                    <div class="k">From</div><div class="v">${esc(text(obs.email_from))}</div>
+                    <div class="k">To</div><div class="v">${esc(text(obs.email_to))}</div>
+                    <div class="k">Date</div><div class="v">${esc(text(obs.email_date))}</div>
+                </div>
+                <h3>${esc(text(obs.email_subject))}</h3>
+                <p class="email-body">${esc(text(obs.email_body))}</p>
+            `;
+            observationEl.textContent = pretty(obs);
+        }
+
+        function renderResult(data) {
+            const obs = data?.observation || {};
+            const score = Number(obs.score ?? data?.reward ?? 0);
+            const done = Boolean(data?.done ?? obs.done);
+            const feedback = text(obs.feedback);
+            const expectedCategory = text(obs.correct_category);
+            const expectedPriority = text(obs.correct_priority);
+
+            resultSummaryEl.className = 'chips';
+            resultSummaryEl.innerHTML = `
+                <span class="${chipClass(score)}">Score: ${score.toFixed(2)}</span>
+                <span class="chip ${done ? 'chip-ok' : 'chip-mid'}">Done: ${done}</span>
+                <span class="chip">Task: ${esc(text(obs.task_name))}</span>
+            `;
+
+            resultPrettyEl.className = 'email-box';
+            resultPrettyEl.innerHTML = `
+                <div class="kv">
+                    <div class="k">Feedback</div><div class="v">${esc(feedback)}</div>
+                    <div class="k">Expected Category</div><div class="v">${esc(expectedCategory)}</div>
+                    <div class="k">Expected Priority</div><div class="v">${esc(expectedPriority)}</div>
+                </div>
+            `;
+
+            resultEl.textContent = pretty(data);
+        }
+
         async function resetTask() {
             resetStatus.textContent = 'Resetting...';
             resetStatus.className = 'status';
@@ -376,7 +498,11 @@ def root():
                     body: JSON.stringify(payload),
                 });
                 const data = await res.json();
-                observationEl.textContent = pretty(data.observation || data);
+                renderObservation(data.observation || data);
+                resultSummaryEl.className = 'chips muted';
+                resultSummaryEl.textContent = 'Episode reset. Submit an action to grade.';
+                resultPrettyEl.className = 'email-box muted';
+                resultPrettyEl.textContent = 'Waiting for step submission.';
                 resultEl.textContent = 'Episode reset. Submit an action to grade.';
                 stepBtn.disabled = false;
                 stepStatus.textContent = 'Ready to submit';
@@ -398,6 +524,11 @@ def root():
             if (lastDifficulty !== 'easy') {
                 action.priority = priorityEl.value;
                 action.summary = summaryEl.value;
+                if (!action.summary.trim()) {
+                    stepStatus.textContent = 'Summary is required for this task';
+                    stepStatus.className = 'status warn';
+                    return;
+                }
             }
             if (lastDifficulty === 'hard') {
                 action.action_items = actionItemsEl.value
@@ -405,6 +536,16 @@ def root():
                     .map((s) => s.trim())
                     .filter(Boolean);
                 action.reply_draft = replyDraftEl.value;
+                if (action.action_items.length === 0) {
+                    stepStatus.textContent = 'Add at least one action item for hard task';
+                    stepStatus.className = 'status warn';
+                    return;
+                }
+                if (!action.reply_draft.trim()) {
+                    stepStatus.textContent = 'Reply draft is required for hard task';
+                    stepStatus.className = 'status warn';
+                    return;
+                }
             }
 
             try {
@@ -414,13 +555,17 @@ def root():
                     body: JSON.stringify({ action }),
                 });
                 const data = await res.json();
-                resultEl.textContent = pretty(data);
+                renderResult(data);
                 stepStatus.textContent = data.done ? 'Episode completed' : 'Step accepted';
                 stepStatus.className = 'status ok';
             } catch (err) {
                 stepStatus.textContent = 'Step failed';
                 stepStatus.className = 'status warn';
                 resultEl.textContent = String(err);
+                resultSummaryEl.className = 'chips warn';
+                resultSummaryEl.textContent = 'Step failed';
+                resultPrettyEl.className = 'email-box warn';
+                resultPrettyEl.textContent = String(err);
             }
         }
 
