@@ -401,7 +401,7 @@ def root():
             }
             if (lastDifficulty === 'hard') {
                 action.action_items = actionItemsEl.value
-                    .split('\n')
+                    .split('\\n')
                     .map((s) => s.trim())
                     .filter(Boolean);
                 action.reply_draft = replyDraftEl.value;
