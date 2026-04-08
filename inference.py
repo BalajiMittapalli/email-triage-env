@@ -353,7 +353,8 @@ def run_task(
 
     # Emit [END]
     score = sum(all_rewards) / len(all_rewards) if all_rewards else 0.0
-    score = min(max(score, 0.0), 1.0)
+    # Validator requires strict bounds: 0 < score < 1.
+    score = min(max(score, 0.01), 0.99)
     rewards_str = ",".join(f"{r:.2f}" for r in all_rewards)
     print(
         f"[END] success={'true' if overall_success else 'false'} "
