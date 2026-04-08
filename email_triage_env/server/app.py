@@ -30,6 +30,9 @@ except ImportError:
 from .email_triage_environment import EmailTriageEnvironment
 
 
+_ui_env = EmailTriageEnvironment()
+
+
 if create_app is not None:
     # Use OpenEnv's create_app for full compatibility
     app = create_app(
@@ -45,7 +48,6 @@ else:
     import uvicorn
 
     app = FastAPI(title="Email Triage Environment", version="0.1.0")
-    _env = EmailTriageEnvironment()
 
     @app.get("/health")
     def health():
@@ -53,7 +55,7 @@ else:
 
     @app.post("/reset")
     def reset(data: dict = {}):
-        obs = _env.reset(**data)
+        obs = _ui_env.reset(**data)
         return {
             "observation": obs.model_dump(),
             "reward": obs.reward,
@@ -63,7 +65,7 @@ else:
     @app.post("/step")
     def step(data: dict = {}):
         action = EmailTriageAction(**data.get("action", data))
-        obs = _env.step(action)
+        obs = _ui_env.step(action)
         return {
             "observation": obs.model_dump(),
             "reward": obs.reward,
@@ -72,7 +74,38 @@ else:
 
     @app.get("/state")
     def state():
-        return _env.state.model_dump()
+        return _ui_env.state.model_dump()
+
+
+@app.post("/ui/reset")
+def ui_reset(data: dict = {}):
+    """Persistent reset endpoint used by the browser demo."""
+    obs = _ui_env.reset(**data)
+    return {
+        "observation": obs.model_dump(),
+        "reward": obs.reward,
+        "done": obs.done,
+        "state": _ui_env.state.model_dump(),
+    }
+
+
+@app.post("/ui/step")
+def ui_step(data: dict = {}):
+    """Persistent step endpoint used by the browser demo."""
+    action = EmailTriageAction(**data.get("action", data))
+    obs = _ui_env.step(action)
+    return {
+        "observation": obs.model_dump(),
+        "reward": obs.reward,
+        "done": obs.done,
+        "state": _ui_env.state.model_dump(),
+    }
+
+
+@app.get("/ui/state")
+def ui_state():
+    """Current browser-demo environment state."""
+    return _ui_env.state.model_dump()
 
 
 @app.get("/")
@@ -337,7 +370,7 @@ def root():
                 seed: Number(seedEl.value || 42),
             };
             try {
-                const res = await fetch('/reset', {
+                const res = await fetch('/ui/reset', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(payload),
@@ -375,10 +408,10 @@ def root():
             }
 
             try {
-                const res = await fetch('/step', {
+                const res = await fetch('/ui/step', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(action),
+                    body: JSON.stringify({ action }),
                 });
                 const data = await res.json();
                 resultEl.textContent = pretty(data);
